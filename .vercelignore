@@ -1,0 +1,8 @@
+# Local secrets must never be uploaded with a CLI deploy.
+# Vercel supplies these from the project's Environment Variables instead.
+.env
+.env.*
+!.env.example
+
+node_modules
+.git
