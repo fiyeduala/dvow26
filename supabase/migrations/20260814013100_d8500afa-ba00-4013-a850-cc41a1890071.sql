@@ -1,0 +1,2 @@
+DELETE FROM public.user_roles WHERE user_id IN (SELECT id FROM auth.users WHERE email IN ('host+devow@example.com','host2+devow@example.com'));
+DELETE FROM auth.users WHERE email IN ('host+devow@example.com','host2+devow@example.com');

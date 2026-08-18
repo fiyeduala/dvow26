@@ -1,0 +1,1 @@
+ALTER TABLE public.event_settings ADD COLUMN IF NOT EXISTS dress_code text NOT NULL DEFAULT 'Black tie — lilac, purple or gold accents';
