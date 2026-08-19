@@ -37,3 +37,9 @@ dist-ssr
 !.env.example
 
 .vercel
+
+# Supabase CLI local link state
+supabase/.temp/
+
+# This project builds with bun (bun.lock); npm's lockfile is a local artifact
+package-lock.json

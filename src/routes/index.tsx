@@ -6,7 +6,15 @@ import { toast } from "sonner";
 import { downloadInvitationCard } from "@/lib/invitation-card";
 import heroImage from "@/assets/wedding-hero.jpg";
 import { CodeGate } from "@/components/invite/CodeGate";
-import { WEDDING, fetchPublicEventSettings, verifyAccessCode, type Guest } from "@/lib/invite";
+import { RsvpForm } from "@/components/invite/RsvpForm";
+import {
+  WEDDING,
+  fetchPublicEventSettings,
+  submitRsvp,
+  verifyAccessCode,
+  type Guest,
+  type RsvpInput,
+} from "@/lib/invite";
 
 const title = `${WEDDING.brideAndGroom} — Private Wedding Invitation`;
 const description = `Enter your personal access code to view the private wedding invitation for ${WEDDING.brideAndGroom} on ${WEDDING.date}.`;
@@ -31,6 +39,7 @@ function Index() {
   const [gateError, setGateError] = useState<string | null>(null);
   const [gatePending, setGatePending] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [rsvpPending, setRsvpPending] = useState(false);
   const { data: settings } = useQuery({
     queryKey: ["public-event-settings"],
     queryFn: fetchPublicEventSettings,
@@ -47,7 +56,6 @@ function Index() {
         .filter(Boolean)
         .join(" — ")
     : WEDDING.reception;
-
 
   const unlock = async (value: string) => {
     setGatePending(true);
@@ -70,6 +78,31 @@ function Index() {
   const lock = () => {
     setGuest(null);
     setCode(null);
+  };
+
+  const sendRsvp = async (input: RsvpInput) => {
+    if (!code) return;
+    setRsvpPending(true);
+    try {
+      const saved = await submitRsvp(code, input);
+      if (!saved) {
+        toast.error("We couldn't find your invitation. Please re-enter your code.");
+        return;
+      }
+      // Re-read the guest so responded_at and the stored values come from the
+      // database rather than being guessed from the form.
+      const refreshed = await verifyAccessCode(code);
+      if (refreshed) setGuest(refreshed);
+      toast.success(
+        input.attending
+          ? "Thank you — we can't wait to see you!"
+          : "Thank you for letting us know.",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Your RSVP could not be saved.");
+    } finally {
+      setRsvpPending(false);
+    }
   };
 
   return (
@@ -119,46 +152,54 @@ function Index() {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        setDownloading(true);
-                        await downloadInvitationCard({
-                          guestName: guest.full_name,
-                          seats: guest.seats,
-                          tableAssignment: guest.table_assignment,
-                          ceremony,
-                          reception,
-                          dressCode: settings?.dress_code || WEDDING.dressCode,
-                        });
-                      } catch (err) {
-                        toast.error(err instanceof Error ? err.message : "Download failed");
-                      } finally {
-                        setDownloading(false);
-                      }
-                    }}
-                    disabled={downloading}
-                    className="flex items-center gap-2 rounded-md border border-gold/50 px-3 py-2 text-xs tracking-widest uppercase text-gold transition hover:text-foreground disabled:opacity-60"
-                  >
-                    <Download className="size-3.5" aria-hidden="true" />
-                    {downloading ? "Preparing…" : "Download invitation"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={lock}
-                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs tracking-widest uppercase text-muted-foreground transition hover:text-foreground"
-                  >
-                    <LogOut className="size-3.5" aria-hidden="true" /> Lock
-                  </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          setDownloading(true);
+                          await downloadInvitationCard({
+                            guestName: guest.full_name,
+                            seats: guest.seats,
+                            tableAssignment: guest.table_assignment,
+                            ceremony,
+                            reception,
+                            dressCode: settings?.dress_code || WEDDING.dressCode,
+                          });
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : "Download failed");
+                        } finally {
+                          setDownloading(false);
+                        }
+                      }}
+                      disabled={downloading}
+                      className="flex items-center gap-2 rounded-md border border-gold/50 px-3 py-2 text-xs tracking-widest uppercase text-gold transition hover:text-foreground disabled:opacity-60"
+                    >
+                      <Download className="size-3.5" aria-hidden="true" />
+                      {downloading ? "Preparing…" : "Download invitation"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={lock}
+                      className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs tracking-widest uppercase text-muted-foreground transition hover:text-foreground"
+                    >
+                      <LogOut className="size-3.5" aria-hidden="true" /> Lock
+                    </button>
                   </div>
                 </div>
 
                 <div className="rule-gold my-7 w-full" />
 
                 <dl className="grid gap-5 sm:grid-cols-2">
-                  <Detail icon={<CalendarDays className="size-4" />} label="Ceremony" value={ceremony} />
-                  <Detail icon={<MapPin className="size-4" />} label="Reception" value={reception} />
+                  <Detail
+                    icon={<CalendarDays className="size-4" />}
+                    label="Ceremony"
+                    value={ceremony}
+                  />
+                  <Detail
+                    icon={<MapPin className="size-4" />}
+                    label="Reception"
+                    value={reception}
+                  />
                   <Detail
                     icon={<Shirt className="size-4" />}
                     label="Dress code"
@@ -192,6 +233,8 @@ function Index() {
                 )}
               </div>
 
+              <RsvpForm guest={guest} onSubmit={sendRsvp} pending={rsvpPending} />
+
               {(settings?.directions || settings?.parking_notes) && (
                 <div className="rounded-xl border border-border bg-card/80 p-7 shadow-panel backdrop-blur-md sm:p-9">
                   <h3 className="text-2xl">Getting there</h3>
@@ -204,7 +247,11 @@ function Index() {
                       />
                     )}
                     {settings?.parking_notes && (
-                      <Detail icon={<Car className="size-4" />} label="Parking" value={settings.parking_notes} />
+                      <Detail
+                        icon={<Car className="size-4" />}
+                        label="Parking"
+                        value={settings.parking_notes}
+                      />
                     )}
                   </dl>
                 </div>
