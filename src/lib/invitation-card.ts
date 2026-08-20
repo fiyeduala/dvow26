@@ -3,9 +3,9 @@ import { WEDDING } from "@/lib/invite";
 export type InvitationCardInput = {
   guestName: string;
   seats: number;
-  tableAssignment?: string | null;
+  tableAssignment?: string | null | undefined;
   accessCode: string;
-  attendingLabel?: string | null;
+  attendingLabel?: string | null | undefined;
   ceremony: string;
   reception: string;
   dressCode: string;
