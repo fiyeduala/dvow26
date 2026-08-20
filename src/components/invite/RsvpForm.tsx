@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Check, Loader2, PartyPopper, PencilLine, X } from "lucide-react";
-import { MEAL_OPTIONS, WEDDING, rsvpSchema, type Guest, type RsvpInput } from "@/lib/invite";
+import {
+  CEREMONY_OPTIONS,
+  MEAL_OPTIONS,
+  WEDDING,
+  ceremonyLabel,
+  rsvpSchema,
+  type CeremonyChoice,
+  type Guest,
+  type RsvpInput,
+} from "@/lib/invite";
 
 const labelClass = "mb-2 block text-[11px] tracking-luxe uppercase text-gold";
 const fieldClass =
@@ -18,6 +27,9 @@ export function RsvpForm({
   const hasReplied = Boolean(guest.responded_at);
   const [editing, setEditing] = useState(!hasReplied);
   const [attending, setAttending] = useState<boolean | null>(guest.attending);
+  const [ceremonies, setCeremonies] = useState<CeremonyChoice | null>(
+    (guest.ceremonies as CeremonyChoice | null) ?? null,
+  );
   const [mealChoice, setMealChoice] = useState(guest.meal_choice ?? "");
   const [plusOneName, setPlusOneName] = useState(guest.plus_one_name ?? "");
   const [dietaryNotes, setDietaryNotes] = useState(guest.dietary_notes ?? "");
@@ -36,6 +48,7 @@ export function RsvpForm({
 
     const parsed = rsvpSchema.safeParse({
       attending,
+      ceremonies: attending ? (ceremonies ?? undefined) : undefined,
       mealChoice: attending ? mealChoice : "",
       plusOneName: attending && allowsPlusOne ? plusOneName : "",
       dietaryNotes: attending ? dietaryNotes : "",
@@ -83,6 +96,20 @@ export function RsvpForm({
 
         {attending ? (
           <>
+            <fieldset>
+              <legend className={labelClass}>Which celebrations will you attend?</legend>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {CEREMONY_OPTIONS.map((option) => (
+                  <ChoiceButton
+                    key={option.value}
+                    selected={ceremonies === option.value}
+                    onClick={() => setCeremonies(option.value)}
+                    label={option.label}
+                  />
+                ))}
+              </div>
+            </fieldset>
+
             <div>
               <label htmlFor="meal-choice" className={labelClass}>
                 Meal preference
@@ -223,6 +250,7 @@ function RsvpSummary({ guest, onEdit }: { guest: Guest; onEdit: () => void }) {
         <>
           <div className="rule-gold my-7 w-full" />
           <dl className="grid gap-5 sm:grid-cols-2">
+            <SummaryItem label="Attending" value={ceremonyLabel(guest.ceremonies)} />
             <SummaryItem label="Meal preference" value={guest.meal_choice ?? "No preference"} />
             {guest.plus_one_name ? (
               <SummaryItem label="Joining you" value={guest.plus_one_name} />
@@ -262,7 +290,7 @@ function ChoiceButton({
 }: {
   selected: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   label: string;
 }) {
   return (

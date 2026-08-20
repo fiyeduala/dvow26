@@ -4,6 +4,8 @@ export type InvitationCardInput = {
   guestName: string;
   seats: number;
   tableAssignment?: string | null;
+  accessCode: string;
+  attendingLabel?: string | null;
   ceremony: string;
   reception: string;
   dressCode: string;
@@ -39,7 +41,14 @@ function paint(ctx: CanvasRenderingContext2D, input: InvitationCardInput, HEIGHT
   ctx.fillStyle = "#0b0710";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  const glow = ctx.createRadialGradient(WIDTH / 2, HEIGHT * 0.32, 40, WIDTH / 2, HEIGHT * 0.32, WIDTH * 0.8);
+  const glow = ctx.createRadialGradient(
+    WIDTH / 2,
+    HEIGHT * 0.32,
+    40,
+    WIDTH / 2,
+    HEIGHT * 0.32,
+    WIDTH * 0.8,
+  );
   glow.addColorStop(0, "rgba(150, 90, 190, 0.28)");
   glow.addColorStop(1, "rgba(11, 7, 16, 0)");
   ctx.fillStyle = glow;
@@ -135,6 +144,28 @@ function paint(ctx: CanvasRenderingContext2D, input: InvitationCardInput, HEIGHT
   ctx.fillText(seatLine, WIDTH / 2, y + 8);
   y += 90;
 
+  // The access code doubles as the slip's identifier on the door.
+  const boxWidth = 560;
+  const boxHeight = 132;
+  const boxX = WIDTH / 2 - boxWidth / 2;
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(boxX, y - 34, boxWidth, boxHeight);
+  ctx.fillStyle = gold;
+  ctx.font = `22px ${sans}`;
+  ctx.fillText("ACCESS CODE", WIDTH / 2, y + 4);
+  ctx.fillStyle = cream;
+  ctx.font = `52px ${sans}`;
+  ctx.fillText(input.accessCode.toUpperCase(), WIDTH / 2, y + 64);
+  y += boxHeight + 40;
+
+  if (input.attendingLabel) {
+    ctx.fillStyle = lilac;
+    ctx.font = `30px ${sans}`;
+    ctx.fillText(input.attendingLabel, WIDTH / 2, y);
+    y += 70;
+  }
+
   const detail = (label: string, value: string) => {
     ctx.fillStyle = gold;
     ctx.font = `24px ${sans}`;
@@ -165,7 +196,11 @@ function measuringContext(ctx: CanvasRenderingContext2D): CanvasRenderingContext
   return new Proxy(ctx, {
     get(target, prop, receiver) {
       if (prop === "createRadialGradient") return () => ({ addColorStop: noop });
-      if (["fillText", "fillRect", "strokeRect", "stroke", "beginPath", "moveTo", "lineTo"].includes(String(prop))) {
+      if (
+        ["fillText", "fillRect", "strokeRect", "stroke", "beginPath", "moveTo", "lineTo"].includes(
+          String(prop),
+        )
+      ) {
         return noop;
       }
       const value = Reflect.get(target, prop, receiver);
@@ -178,7 +213,18 @@ function measuringContext(ctx: CanvasRenderingContext2D): CanvasRenderingContext
   }) as CanvasRenderingContext2D;
 }
 
-export async function downloadInvitationCard(input: InvitationCardInput) {
+function cardFileName(guestName: string) {
+  const safeName = guestName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
+  return `DVow2026-Invitation-${safeName || "Guest"}.png`;
+}
+
+/**
+ * Paints the card and hands back a PNG. The caller decides whether to show it
+ * on screen or save it, so the guest can see the slip before downloading it.
+ */
+export async function renderInvitationCard(
+  input: InvitationCardInput,
+): Promise<{ blob: Blob; url: string; fileName: string }> {
   if (document.fonts?.ready) {
     try {
       await document.fonts.ready;
@@ -203,13 +249,21 @@ export async function downloadInvitationCard(input: InvitationCardInput) {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("The invitation image could not be created.");
 
-  const url = URL.createObjectURL(blob);
+  return { blob, url: URL.createObjectURL(blob), fileName: cardFileName(input.guestName) };
+}
+
+export async function downloadInvitationCard(input: InvitationCardInput) {
+  const { url, fileName } = await renderInvitationCard(input);
+  saveInvitationCard(url, fileName);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/** Saves an already-rendered card without repainting it. */
+export function saveInvitationCard(url: string, fileName: string) {
   const link = document.createElement("a");
-  const safeName = input.guestName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
   link.href = url;
-  link.download = `DVow2026-Invitation-${safeName || "Guest"}.png`;
+  link.download = fileName;
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

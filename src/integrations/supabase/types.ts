@@ -69,6 +69,7 @@ export type Database = {
         Row: {
           access_code: string
           attending: boolean | null
+          ceremonies: string | null
           created_at: string
           dietary_notes: string | null
           first_opened_at: string | null
@@ -80,12 +81,14 @@ export type Database = {
           plus_one_name: string | null
           responded_at: string | null
           seats: number
+          self_registered: boolean
           table_assignment: string | null
           updated_at: string
         }
         Insert: {
           access_code: string
           attending?: boolean | null
+          ceremonies?: string | null
           created_at?: string
           dietary_notes?: string | null
           first_opened_at?: string | null
@@ -97,12 +100,14 @@ export type Database = {
           plus_one_name?: string | null
           responded_at?: string | null
           seats?: number
+          self_registered?: boolean
           table_assignment?: string | null
           updated_at?: string
         }
         Update: {
           access_code?: string
           attending?: boolean | null
+          ceremonies?: string | null
           created_at?: string
           dietary_notes?: string | null
           first_opened_at?: string | null
@@ -114,6 +119,7 @@ export type Database = {
           plus_one_name?: string | null
           responded_at?: string | null
           seats?: number
+          self_registered?: boolean
           table_assignment?: string | null
           updated_at?: string
         }
@@ -146,6 +152,18 @@ export type Database = {
     }
     Functions: {
       claim_admin: { Args: never; Returns: boolean }
+      create_rsvp: {
+        Args: {
+          _attending: boolean
+          _ceremonies?: string
+          _dietary_notes?: string
+          _full_name: string
+          _meal_choice?: string
+          _message?: string
+        }
+        Returns: string
+      }
+      generate_access_code: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -157,6 +175,7 @@ export type Database = {
       submit_rsvp: {
         Args: {
           _attending: boolean
+          _ceremonies?: string
           _code: string
           _dietary_notes?: string
           _meal_choice?: string
@@ -169,6 +188,7 @@ export type Database = {
         Args: { _code: string }
         Returns: {
           attending: boolean
+          ceremonies: string
           dietary_notes: string
           full_name: string
           meal_choice: string

@@ -102,3 +102,38 @@ export function randomCode(prefix = "DEVOW") {
   const n = Math.floor(1000 + Math.random() * 9000);
   return `${prefix}-${n}`;
 }
+
+const EXPORT_COLUMNS: { header: string; value: (row: GuestRow) => string }[] = [
+  { header: "Name", value: (g) => g.full_name },
+  { header: "Access code", value: (g) => g.access_code },
+  { header: "Seats", value: (g) => String(g.seats) },
+  { header: "Table", value: (g) => g.table_assignment ?? "" },
+  {
+    header: "RSVP",
+    value: (g) => (g.attending === null ? "No reply" : g.attending ? "Attending" : "Declined"),
+  },
+  { header: "Ceremonies", value: (g) => g.ceremonies ?? "" },
+  { header: "Meal", value: (g) => g.meal_choice ?? "" },
+  { header: "Plus one", value: (g) => g.plus_one_name ?? "" },
+  { header: "Dietary notes", value: (g) => g.dietary_notes ?? "" },
+  { header: "Message", value: (g) => g.message ?? "" },
+  { header: "Replied at", value: (g) => g.responded_at ?? "" },
+  { header: "First opened", value: (g) => g.first_opened_at ?? "" },
+  { header: "Source", value: (g) => (g.self_registered ? "Self-registered" : "Invited") },
+  { header: "Status", value: (g) => (g.is_active ? "Active" : "Deactivated") },
+  { header: "Created at", value: (g) => g.created_at },
+];
+
+function csvCell(value: string) {
+  // Quote everything: names and notes routinely contain commas and quotes.
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+/** Every stored field for every guest, for the hosts' own records. */
+export function guestsToCsv(rows: GuestRow[]): string {
+  const lines = [EXPORT_COLUMNS.map((c) => csvCell(c.header)).join(",")];
+  for (const row of rows) {
+    lines.push(EXPORT_COLUMNS.map((c) => csvCell(c.value(row))).join(","));
+  }
+  return lines.join("\r\n");
+}

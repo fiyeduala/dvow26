@@ -32,14 +32,17 @@ export function CodeGate({
       <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-border text-gold">
         <Lock className="size-5" aria-hidden="true" />
       </div>
-      <h2 className="mt-6 text-center text-3xl">Private invitation</h2>
+      <h2 className="mt-6 text-center text-3xl">Your access card</h2>
       <p className="mt-2 text-center text-sm text-muted-foreground">
-        Enter the access code printed on your invitation to view the details and RSVP.
+        Enter the access code you were given when you replied to open your card.
       </p>
 
       <form onSubmit={handle} className="mt-8 space-y-4">
         <div>
-          <label htmlFor="access-code" className="mb-2 block text-[11px] tracking-luxe uppercase text-gold">
+          <label
+            htmlFor="access-code"
+            className="mb-2 block text-[11px] tracking-luxe uppercase text-gold"
+          >
             Access code
           </label>
           <input

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Download, LogOut, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { SAMPLE_CSV, importGuests, parseGuestCsv } from "@/lib/guest-csv";
+import { ceremonyLabel } from "@/lib/invite";
 import {
   addGuest,
   claimAdmin,
   deleteGuest,
   fetchEventSettings,
   fetchGuests,
+  guestsToCsv,
   randomCode,
   saveEventSettings,
   setGuestActive,
@@ -20,7 +22,8 @@ import {
 } from "@/lib/admin";
 
 const title = "Guest & venue admin — #DEVOW2026";
-const description = "Manage wedding guest access codes, seats, table assignments, venue details and directions.";
+const description =
+  "Manage wedding guest access codes, seats, table assignments, venue details and directions.";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -116,8 +119,8 @@ function AdminPage() {
           <div className={panel}>
             <h2 className="text-2xl">Awaiting admin rights</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              This account isn't an admin yet. Reload the page — if an admin already exists, ask them
-              to grant you access.
+              This account isn't an admin yet. Reload the page — if an admin already exists, ask
+              them to grant you access.
             </p>
           </div>
         ) : tab === "guests" ? (
@@ -130,10 +133,15 @@ function AdminPage() {
   );
 }
 
-function GuestsTab({ guests }: { guests: ReturnType<typeof useQuery<Awaited<ReturnType<typeof fetchGuests>>>> }) {
+function GuestsTab({
+  guests,
+}: {
+  guests: ReturnType<typeof useQuery<Awaited<ReturnType<typeof fetchGuests>>>>;
+}) {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin", "guests"] });
 
+  const [search, setSearch] = useState("");
   const [form, setForm] = useState<GuestInput>({
     full_name: "",
     access_code: randomCode(),
@@ -175,22 +183,53 @@ function GuestsTab({ guests }: { guests: ReturnType<typeof useQuery<Awaited<Retu
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const rows = guests.data ?? [];
-  const active = rows.filter((g) => g.is_active);
+  const allRows = guests.data ?? [];
+  const active = allRows.filter((g) => g.is_active);
   const totalSeats = active.reduce((sum, g) => sum + g.seats, 0);
-  const confirmed = rows.filter((g) => g.attending === true).length;
+  const confirmed = allRows.filter((g) => g.attending === true);
+  const declined = allRows.filter((g) => g.attending === false).length;
+  const awaiting = allRows.filter((g) => g.attending === null).length;
+  // "Both" counts towards each ceremony's head count, which is what catering needs.
+  const atTraditional = confirmed.filter(
+    (g) => g.ceremonies === "traditional" || g.ceremonies === "both",
+  ).length;
+  const atWhite = confirmed.filter(
+    (g) => g.ceremonies === "white" || g.ceremonies === "both",
+  ).length;
+  const selfRegistered = allRows.filter((g) => g.self_registered).length;
+
+  const term = search.trim().toLowerCase();
+  const rows = term
+    ? allRows.filter((g) =>
+        [g.full_name, g.access_code, g.table_assignment, g.meal_choice, g.message]
+          .filter(Boolean)
+          .some((field) => String(field).toLowerCase().includes(term)),
+      )
+    : allRows;
+
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([guestsToCsv(allRows)], { type: "text/csv" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `dvow2026-guests-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Active codes" value={active.length} />
         <Stat label="Seats reserved" value={totalSeats} />
-        <Stat label="Confirmed yes" value={confirmed} />
+        <Stat label="Confirmed yes" value={confirmed.length} />
+        <Stat label="Declined" value={declined} />
+        <Stat label="Awaiting reply" value={awaiting} />
+        <Stat label="At traditional" value={atTraditional} />
+        <Stat label="At white" value={atWhite} />
+        <Stat label="Self-registered" value={selfRegistered} />
       </div>
 
       <CsvUpload onDone={invalidate} />
-
-
 
       <form
         className={panel}
@@ -272,17 +311,57 @@ function GuestsTab({ guests }: { guests: ReturnType<typeof useQuery<Awaited<Retu
       </form>
 
       <div className={panel}>
-        <h2 className="text-2xl">Guest list</h2>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl">Guest list</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Every reply, in full. {rows.length} of {allRows.length} shown.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, code, table, note…"
+              className="w-56 rounded-md border border-border bg-background/60 px-3 py-2 text-sm outline-none focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={allRows.length === 0}
+              className="flex items-center gap-2 rounded-md border border-gold/50 px-3 py-2 text-xs tracking-luxe uppercase text-gold transition hover:text-foreground disabled:opacity-60"
+            >
+              <Download className="size-3.5" aria-hidden="true" /> Export CSV
+            </button>
+          </div>
+        </div>
+
         {guests.isLoading ? (
           <p className="mt-4 text-sm text-muted-foreground">Loading guests…</p>
         ) : rows.length === 0 ? (
-          <p className="mt-4 text-sm text-muted-foreground">No guests yet.</p>
+          <p className="mt-4 text-sm text-muted-foreground">
+            {allRows.length === 0 ? "No guests yet." : "No guests match that search."}
+          </p>
         ) : (
           <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
-                  {["Guest", "Code", "Seats", "Table", "RSVP", "Status", ""].map((h) => (
+                  {[
+                    "Guest",
+                    "Code",
+                    "Seats",
+                    "Table",
+                    "RSVP",
+                    "Ceremonies",
+                    "Meal",
+                    "Dietary",
+                    "Note",
+                    "Replied",
+                    "Source",
+                    "Status",
+                    "",
+                  ].map((h) => (
                     <th key={h} className={`pb-3 pr-4 ${labelCls}`}>
                       {h}
                     </th>
@@ -291,8 +370,15 @@ function GuestsTab({ guests }: { guests: ReturnType<typeof useQuery<Awaited<Retu
               </thead>
               <tbody>
                 {rows.map((g) => (
-                  <tr key={g.id} className="border-b border-border/50">
-                    <td className="py-3 pr-4">{g.full_name}</td>
+                  <tr key={g.id} className="border-b border-border/50 align-top">
+                    <td className="py-3 pr-4">
+                      {g.full_name}
+                      {g.plus_one_name ? (
+                        <span className="block text-xs text-muted-foreground">
+                          +1 {g.plus_one_name}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="py-3 pr-4 font-mono text-xs text-lilac">{g.access_code}</td>
                     <td className="py-3 pr-4">
                       <input
@@ -308,8 +394,38 @@ function GuestsTab({ guests }: { guests: ReturnType<typeof useQuery<Awaited<Retu
                       />
                     </td>
                     <td className="py-3 pr-4 text-muted-foreground">{g.table_assignment ?? "—"}</td>
+                    <td className="py-3 pr-4">
+                      <span
+                        className={
+                          g.attending === null
+                            ? "text-muted-foreground"
+                            : g.attending
+                              ? "text-gold"
+                              : "text-destructive"
+                        }
+                      >
+                        {g.attending === null ? "No reply" : g.attending ? "Attending" : "Declined"}
+                      </span>
+                    </td>
                     <td className="py-3 pr-4 text-muted-foreground">
-                      {g.attending === null ? "No reply" : g.attending ? "Attending" : "Declined"}
+                      {g.ceremonies ? ceremonyLabel(g.ceremonies) : "—"}
+                    </td>
+                    <td className="py-3 pr-4 text-muted-foreground">{g.meal_choice ?? "—"}</td>
+                    <td className="max-w-[180px] py-3 pr-4 text-muted-foreground">
+                      <span className="line-clamp-2" title={g.dietary_notes ?? ""}>
+                        {g.dietary_notes ?? "—"}
+                      </span>
+                    </td>
+                    <td className="max-w-[220px] py-3 pr-4 text-muted-foreground">
+                      <span className="line-clamp-2" title={g.message ?? ""}>
+                        {g.message ?? "—"}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-muted-foreground">
+                      {g.responded_at ? new Date(g.responded_at).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="py-3 pr-4 text-muted-foreground">
+                      {g.self_registered ? "Self" : "Invited"}
                     </td>
                     <td className="py-3 pr-4">
                       <span className={g.is_active ? "text-gold" : "text-muted-foreground"}>
@@ -400,18 +516,43 @@ function VenueTab({
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <Text label="Ceremony venue" value={form.ceremony_venue} onChange={set("ceremony_venue")} />
         <Text label="Ceremony time" value={form.ceremony_time} onChange={set("ceremony_time")} />
-        <Text label="Ceremony address" value={form.ceremony_address} onChange={set("ceremony_address")} />
-        <Text label="Ceremony map link" value={form.ceremony_map_url} onChange={set("ceremony_map_url")} />
-        <Text label="Reception venue" value={form.reception_venue} onChange={set("reception_venue")} />
+        <Text
+          label="Ceremony address"
+          value={form.ceremony_address}
+          onChange={set("ceremony_address")}
+        />
+        <Text
+          label="Ceremony map link"
+          value={form.ceremony_map_url}
+          onChange={set("ceremony_map_url")}
+        />
+        <Text
+          label="Reception venue"
+          value={form.reception_venue}
+          onChange={set("reception_venue")}
+        />
         <Text label="Reception time" value={form.reception_time} onChange={set("reception_time")} />
-        <Text label="Reception address" value={form.reception_address} onChange={set("reception_address")} />
-        <Text label="Reception map link" value={form.reception_map_url} onChange={set("reception_map_url")} />
+        <Text
+          label="Reception address"
+          value={form.reception_address}
+          onChange={set("reception_address")}
+        />
+        <Text
+          label="Reception map link"
+          value={form.reception_map_url}
+          onChange={set("reception_map_url")}
+        />
       </div>
 
       <div className="mt-4 grid gap-4">
         <Text label="Dress code" value={form.dress_code} onChange={set("dress_code")} />
         <Area label="Directions" value={form.directions} onChange={set("directions")} rows={4} />
-        <Area label="Parking notes" value={form.parking_notes} onChange={set("parking_notes")} rows={2} />
+        <Area
+          label="Parking notes"
+          value={form.parking_notes}
+          onChange={set("parking_notes")}
+          rows={2}
+        />
       </div>
 
       <button
@@ -487,7 +628,9 @@ function CsvUpload({ onDone }: { onDone: () => void }) {
       const text = await file.text();
       const parsed = parseGuestCsv(text);
       if (parsed.rows.length === 0) {
-        setReport(parsed.errors.map((e) => (e.rowNumber ? `Row ${e.rowNumber}: ${e.message}` : e.message)));
+        setReport(
+          parsed.errors.map((e) => (e.rowNumber ? `Row ${e.rowNumber}: ${e.message}` : e.message)),
+        );
         toast.error("No valid guest rows found in that file.");
         return;
       }
@@ -525,8 +668,8 @@ function CsvUpload({ onDone }: { onDone: () => void }) {
       <p className="mt-2 text-sm text-muted-foreground">
         Upload a CSV with columns <span className="text-gold">name</span>,{" "}
         <span className="text-gold">access code</span>, and optionally{" "}
-        <span className="text-gold">seats</span> and <span className="text-gold">table</span>. Existing
-        codes are skipped.
+        <span className="text-gold">seats</span> and <span className="text-gold">table</span>.
+        Existing codes are skipped.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
