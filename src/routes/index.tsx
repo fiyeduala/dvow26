@@ -186,10 +186,10 @@ function Index() {
           </p>
           <div className="rule-gold mx-auto mt-6 w-40" />
           <p className="mt-6 text-[11px] tracking-luxe uppercase text-gold">The wedding of</p>
-          <h1 className="mt-4 text-4xl leading-tight text-gilded sm:text-5xl">
-            {WEDDING.brideFullName}
-            <span className="mx-3 text-lilac">&amp;</span>
-            {WEDDING.groomFullName}
+          <h1 className="mt-4 flex flex-col items-center text-4xl leading-tight text-gilded sm:text-5xl">
+            <span>{WEDDING.brideFullName}</span>
+            <span className="my-2 text-3xl text-lilac sm:my-3 sm:text-4xl">&amp;</span>
+            <span>{WEDDING.groomFullName}</span>
           </h1>
 
           <p className="mt-3 text-sm tracking-[0.25em] text-lilac">{WEDDING.hashtag}</p>
