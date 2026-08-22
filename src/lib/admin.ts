@@ -35,6 +35,19 @@ export const settingsSchema = z.object({
 
 export type SettingsInput = z.infer<typeof settingsSchema>;
 
+/**
+ * RLS turns a forbidden write into a no-op rather than an error: PostgREST
+ * matches zero rows and returns success. Asking for the changed rows back is
+ * the only way to tell "saved" apart from "silently discarded".
+ */
+function assertWrote(rows: { id: string }[] | null, what: string) {
+  if (!rows || rows.length === 0) {
+    throw new Error(
+      `${what} was not saved — this account does not have admin rights. Ask an existing admin to grant them, then sign out and back in.`,
+    );
+  }
+}
+
 export async function fetchEventSettings(): Promise<EventSettings | null> {
   const { data, error } = await supabase
     .from("event_settings")
@@ -48,8 +61,13 @@ export async function fetchEventSettings(): Promise<EventSettings | null> {
 
 export async function saveEventSettings(id: string, input: SettingsInput) {
   const values = settingsSchema.parse(input);
-  const { error } = await supabase.from("event_settings").update(values).eq("id", id);
+  const { data, error } = await supabase
+    .from("event_settings")
+    .update(values)
+    .eq("id", id)
+    .select("id");
   if (error) throw new Error(error.message);
+  assertWrote(data, "Venue details");
 }
 
 export async function fetchGuests(): Promise<GuestRow[]> {
@@ -79,8 +97,9 @@ export async function addGuest(input: GuestInput) {
 }
 
 export async function updateGuest(id: string, patch: Partial<GuestRow>) {
-  const { error } = await supabase.from("guests").update(patch).eq("id", id);
+  const { data, error } = await supabase.from("guests").update(patch).eq("id", id).select("id");
   if (error) throw new Error(error.message);
+  assertWrote(data, "The guest");
 }
 
 export async function setGuestActive(id: string, isActive: boolean) {
@@ -88,8 +107,9 @@ export async function setGuestActive(id: string, isActive: boolean) {
 }
 
 export async function deleteGuest(id: string) {
-  const { error } = await supabase.from("guests").delete().eq("id", id);
+  const { data, error } = await supabase.from("guests").delete().eq("id", id).select("id");
   if (error) throw new Error(error.message);
+  assertWrote(data, "The guest");
 }
 
 export async function claimAdmin(): Promise<boolean> {

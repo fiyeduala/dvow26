@@ -50,9 +50,21 @@ function AdminPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"guests" | "venue">("guests");
 
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
   useEffect(() => {
-    void claimAdmin();
-  }, []);
+    let cancelled = false;
+    void claimAdmin().then((ok) => {
+      if (cancelled) return;
+      setIsAdmin(ok);
+      // The queries above fired before the role was claimed, so anything RLS
+      // hid on that first pass needs fetching again.
+      if (ok) void queryClient.invalidateQueries();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [queryClient]);
 
   const guests = useQuery({ queryKey: ["admin", "guests"], queryFn: fetchGuests });
   const settings = useQuery({ queryKey: ["event-settings"], queryFn: fetchEventSettings });
@@ -64,8 +76,12 @@ function AdminPage() {
     await navigate({ to: "/auth", replace: true });
   };
 
+  // claim_admin() reports whether this account actually holds the role. The
+  // guests query cannot be used for this: RLS hides rows on SELECT rather than
+  // raising, so a non-admin just sees an empty list and no error at all.
   const isDenied =
-    guests.isError && /permission|row-level|denied/i.test(guests.error?.message ?? "");
+    isAdmin === false ||
+    (guests.isError && /permission|row-level|denied/i.test(guests.error?.message ?? ""));
 
   return (
     <main className="relative min-h-screen px-5 py-12 sm:px-8">
